@@ -1,0 +1,207 @@
+---
+title: "tidyeval"
+subtitle:
+author: "Devin Bunch"
+institute: "University of Oregon"
+date: "04.23.2021"
+output:
+  xaringan::moon_reader:
+    lib_dir: libs
+    nature:
+      highlightStyle: github
+      highlightLines: true
+      countIncrementalSlides: false
+---
+class: center, middle
+
+# Before we dive into tidyeval...
+
+**rlang** is a toolkit for working with core R and **tidyverse** features, and this hosts the tidy evaluation framework.
+
+**tidyeval** powers packages like **dplyr** and **tidyr** within the scope of the **tidyverse**. It makes it possible to manipulate data frame columns *as if* they were defined in the workspace.
+
+---
+
+#Is it a package?
+
+---
+
+#Is it a package?
+
++ No
+
+---
+
+#Is it a package?
+
++ No
+
++ The tidy eval framework, which is a well-founded system for non-standard evaluation built on quasiquotation (!!) and quosures (quo()).
+
++ The syntax **!!** is known as "bang bang" (which we will see in use soon)
+
++ The syntax **{{}}** is known as "curly curly"
+
++ By adding tidyeval  syntax  to our function assignments, we create a data masking problem that can be solved by implementing **bang bang** and **curly curly** into our function. 
+  * Otherwise, we would have to use *$* to  call every variable into a function
+
+---
+
+# Why do we want to know about tidyeval?
+
++ Makes coding **quicker** and more **convenient**
+
++ New, unfamiliar syntax introduces two **new programming concepts** (quote and unquote)
+
++ dplyr uses **data masking**, processed by tidyeval, but invisible to us behind the scenes
+
+---
+class: inverse, center, middle
+
+# Working Example
+
+---
+background-image: url(https://wallpapercave.com/wp/k7QW6My.jpg) 
+
+```{r setup, include=FALSE}
+options(htmltools.dir.version = FALSE)
+
+library(pacman)
+p_load(xaringan,tidyverse, dplyr, rlang)
+
+```
+
+---
+
+# Starwars Data Set Example
+
+From the base R package, we can import the "starwars" dataset and walk through an example
+
+```{r}
+#We can do this by calling it by name (ironic)
+starwars
+```
+
+---
+
+#Errors?
+```{r, error = TRUE}
+#Let's first look at the names in our "starwars" data set
+names(starwars)
+
+#Now,let's call a column variable from this and see what happens
+starships
+homeworld
+```
+
++ Although we do this all the time, we cannot call column variables by name outside of dplyr's syntax
++ This is what **tidyeval** works to do in **tidyverse** packages that is usually unbenounced to us
+
+---
+
+#Errors?
+
++ From **dplyr**, we can use our package commands **group_by** and **summarize** that consider variable names as given in the piped dataset: 
+
+```{r, warning=FALSE}
+starwars%>% group_by(mass) %>% summarize(mass_maximum = max(mass, na.rm = TRUE))
+```
++ i.e., we do not have to type out
+  *starwars[ ,summarize(mass_maximum = max(starwars$mass, na.rm = TRUE)), by = starwars$mass]
+
+
+--- 
+
+#Errors?
+
++ Then we can create a function out of our dplyr commands:
+```{r}
+max_by <- function(data, var, by) {
+  data %>%
+    group_by(by) %>%
+    summarise(maximum = max(var, na.rm = TRUE))
+}
+```
++ But does this cause problems?
+
+---
+# Errors.
+
++Yes
+
+```{r, error = TRUE}
+starwars %>% max_by(mass, by = gender)
+```
+
+
+---
+
+# Errors.
+
+```{r, error = TRUE}
+starwars %>% max_by(mass, by = gender)
+```
++ What is going on here? **Data masking**
+
++ Our **dplyr** verbs achieve and bypass the requirement of calling variables from a dataset over and over...
+
++ The blueprint of our dplyr code resumes its evaluation inside the data mask through pipes (%>%)
+
++ The example above fails because group_by() is capturing the wrong piece of blueprint
+  * It thinks our variable in the data set is literally called "by"
+
++ This feature is unique to the R language and greatly streamlines the writing and reading of code in interactive scripts. Unfortunately, it also makes it more complex to reuse common patterns inside functions. 
+
+[click here to learn more about tidyeval](https://tidyeval.tidyverse.org/sec-why-how.html)
+
+---
+
+# Fix with **!!**
+
++ To solve this, tidy evaluation provides enquo() to delay the interpretation of code and capture its blueprint, and the surgery operator **!!** for modifying blueprints. 
+  *The combination of using enquo() and !! is called the quote-and-unquote pattern:
+```{r}
+max_by <- function(data, var, by) {
+  data %>%
+    group_by(!!enquo(by)) %>%
+    summarise(maximum = max(!!enquo(var), na.rm = TRUE))
+}
+```
+
+
+---
+
+# Fix with **!!**
+
++ Now let's try to run our function on our data set like before
++ Do we get any errors?
+```{r}
+starwars %>% max_by(mass, by = gender)
+```
+
+
+
+---
+
+# Fix with **{{**
+### Another interpolation pattern referred to by "curly curly"
+
++ This operator simplifies writing functions around tidyverse pipelines
+
+```{r}
+max_by <- function(data, var, by) {
+  data %>%
+    group_by({{ by }}) %>%
+    summarise(maximum = max({{ var }}, na.rm = TRUE))
+}
+starwars %>% max_by(height, by = gender)
+
+```
+
+---
+class: inverse, center, middle
+# **tidyeval** fixed our function errors in two ways!
+
+### The End
+
+#### Thanks!
